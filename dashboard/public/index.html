@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard Sophie</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <h1>📊 Dashboard Sophie</h1>
+    <p>Total Session: <strong id="totalSessions">Loading...</strong></p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>No</th>
+          <th>Session ID</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="sessionTable">
+        <tr>
+          <td colspan="3">Memuat data...</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <script>
+      fetch("/api/sessions")
+        .then((res) => res.json())
+        .then((data) => {
+          document.getElementById("totalSessions").textContent =
+            data.totalSessions;
+
+          const tbody = document.getElementById("sessionTable");
+          tbody.innerHTML = data.sessions
+            .map(
+              (s, i) => `
+                    <tr>
+                        <td>${i + 1}</td>
+                        <td>${s.sessionId}</td>
+                        <td><a href="/session.html?id=${s.sessionId}">Lihat Detail →</a></td>
+                    </tr>
+                `,
+            )
+            .join("");
+        })
+        .catch((err) => {
+          document.getElementById("sessionTable").innerHTML =
+            `<tr><td colspan="3">Error: ${err.message}</td></tr>`;
+        });
+    </script>
+  </body>
+</html>

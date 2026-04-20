@@ -1,0 +1,929 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Detail Session — Sophie</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        line-height: 1.6;
+        color: #1a1a1a;
+        background: #f5f5f3;
+        padding: 24px;
+      }
+
+      a {
+        color: #185fa5;
+        text-decoration: none;
+        font-size: 13px;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+
+      h1 {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 12px 0 4px;
+      }
+      .session-meta {
+        font-size: 13px;
+        color: #666;
+        margin-bottom: 24px;
+      }
+
+      h2 {
+        font-size: 15px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        color: #111;
+      }
+
+      section {
+        margin-bottom: 28px;
+      }
+
+      /* Metric cards */
+      .rekap-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+        gap: 10px;
+      }
+      .rekap-card {
+        background: #fff;
+        border: 0.5px solid #e0e0dc;
+        border-radius: 10px;
+        padding: 12px 14px;
+      }
+      .rekap-card .label {
+        font-size: 11px;
+        color: #888;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .rekap-card .value {
+        font-size: 26px;
+        font-weight: 600;
+        line-height: 1;
+      }
+      .rekap-card.ca .value {
+        color: #27ae60;
+      }
+      .rekap-card.or .value {
+        color: #e67e22;
+      }
+      .rekap-card.ur .value {
+        color: #e74c3c;
+      }
+      .rekap-card.md .value {
+        color: #8e44ad;
+      }
+      .rekap-card.total .value {
+        color: #185fa5;
+      }
+
+      /* Aspek tabs */
+      .aspek-tabs {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      .aspek-tab {
+        padding: 5px 14px;
+        border-radius: 20px;
+        border: 0.5px solid #ccc;
+        background: #fff;
+        font-size: 13px;
+        cursor: pointer;
+        color: #444;
+      }
+      .aspek-tab.active {
+        background: #185fa5;
+        border-color: #185fa5;
+        color: #fff;
+        font-weight: 500;
+      }
+
+      /* Per-aspek rekap */
+      .aspek-rekap {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .aspek-rekap-card {
+        background: #f9f9f7;
+        border: 0.5px solid #e0e0dc;
+        border-radius: 8px;
+        padding: 8px 10px;
+        text-align: center;
+      }
+      .aspek-rekap-card .alabel {
+        font-size: 10px;
+        color: #999;
+      }
+      .aspek-rekap-card .aval {
+        font-size: 18px;
+        font-weight: 600;
+      }
+
+      /* Skor bar */
+      .skor-bar-wrap {
+        margin-bottom: 6px;
+      }
+      .skor-bar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 4px;
+      }
+      .skor-bar-label {
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .skor-bar-value {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .skor-bar-track {
+        height: 8px;
+        background: #ebebeb;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .skor-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.6s ease;
+      }
+
+      /* Radar */
+      .chart-wrapper {
+        background: #fff;
+        border: 0.5px solid #e0e0dc;
+        border-radius: 10px;
+        padding: 16px;
+        max-width: 380px;
+        margin: 0 auto;
+      }
+
+      /* Rekomendasi */
+      .rek-list {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .rek-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        background: #fff;
+        border: 0.5px solid #e0e0dc;
+        border-radius: 8px;
+        padding: 10px 14px;
+      }
+      .rek-item .rek-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        flex-shrink: 0;
+      }
+      .rek-item.warn .rek-icon {
+        background: #fef3e2;
+        color: #c0782a;
+      }
+      .rek-item.ok .rek-icon {
+        background: #eafbf2;
+        color: #27ae60;
+      }
+      .rek-item .rek-body {
+        flex: 1;
+      }
+      .rek-item .rek-title {
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .rek-item .rek-desc {
+        font-size: 12px;
+        color: #666;
+        margin-top: 2px;
+      }
+
+      /* Badge */
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.5;
+      }
+      .badge-ca {
+        background: #eafbf2;
+        color: #1a7a45;
+      }
+      .badge-or {
+        background: #fef3e2;
+        color: #a05a10;
+      }
+      .badge-ur {
+        background: #fdecec;
+        color: #a03030;
+      }
+      .badge-md {
+        background: #f3eafc;
+        color: #6a2f9a;
+      }
+
+      /* Table */
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      thead th {
+        text-align: left;
+        padding: 8px 10px;
+        font-weight: 500;
+        font-size: 11px;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        border-bottom: 0.5px solid #e0e0dc;
+        background: #fafafa;
+      }
+      tbody td {
+        padding: 8px 10px;
+        border-bottom: 0.5px solid #f0f0ee;
+        color: #222;
+        vertical-align: top;
+      }
+      tbody tr:last-child td {
+        border-bottom: none;
+      }
+      tbody tr:hover td {
+        background: #fafaf8;
+      }
+
+      /* Aspek filter untuk breakdown */
+      .filter-row {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .filter-row label {
+        font-size: 12px;
+        color: #888;
+      }
+      select {
+        font-size: 12px;
+        border: 0.5px solid #ccc;
+        border-radius: 6px;
+        padding: 4px 8px;
+        background: #fff;
+        color: #222;
+      }
+
+      /* FIS steps debug panel */
+      .fis-panel {
+        background: #f9f9f7;
+        border: 0.5px solid #e0e0dc;
+        border-radius: 8px;
+        padding: 12px 14px;
+        margin-bottom: 10px;
+      }
+      .fis-step {
+        font-size: 12px;
+        color: #555;
+        line-height: 1.8;
+      }
+      .fis-step strong {
+        color: #222;
+      }
+
+      .empty {
+        color: #999;
+        font-size: 13px;
+        padding: 16px 0;
+      }
+
+      /* Skor aspek grid */
+      .aspek-skor-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .aspek-skor-card {
+        background: #fff;
+        border: 0.5px solid #e0e0dc;
+        border-radius: 10px;
+        padding: 12px 14px;
+      }
+      .aspek-skor-card .as-label {
+        font-size: 11px;
+        color: #888;
+        margin-bottom: 2px;
+      }
+      .aspek-skor-card .as-skor {
+        font-size: 24px;
+        font-weight: 700;
+        line-height: 1.1;
+      }
+      .aspek-skor-card .as-kat {
+        font-size: 11px;
+        font-weight: 500;
+        margin-top: 4px;
+        padding: 1px 6px;
+        border-radius: 3px;
+        display: inline-block;
+      }
+      .kat-siap {
+        background: #eafbf2;
+        color: #1a7a45;
+      }
+      .kat-perlu {
+        background: #fef3e2;
+        color: #a05a10;
+      }
+      .kat-belum {
+        background: #fdecec;
+        color: #a03030;
+      }
+      .kat-nodata {
+        background: #f0f0ee;
+        color: #888;
+      }
+    </style>
+  </head>
+  <body>
+    <a href="/">← Kembali ke daftar sesi</a>
+    <h1 id="sessionTitle">Memuat...</h1>
+    <p class="session-meta" id="sessionMeta"></p>
+
+    <section>
+      <h2>Rekap keseluruhan</h2>
+      <div id="rekapGrid" class="rekap-grid"></div>
+    </section>
+
+    <section>
+      <h2>Skor kesiapan per aspek</h2>
+      <div id="aspekSkorGrid" class="aspek-skor-grid"></div>
+
+      <div class="chart-wrapper">
+        <canvas
+          id="radarChart"
+          role="img"
+          aria-label="Radar chart profil kesiapan user per aspek (K3, Material, Prosedur, Progres)"
+          >Radar chart profil kesiapan.</canvas
+        >
+      </div>
+    </section>
+
+    <section>
+      <h2>Detail per aspek</h2>
+      <div class="aspek-tabs" id="aspekTabs"></div>
+      <div id="aspekDetail"></div>
+    </section>
+
+    <section>
+      <h2>Rekomendasi fokus OJT</h2>
+      <ul class="rek-list" id="rekomendasiList"></ul>
+    </section>
+
+    <section>
+      <h2>Breakdown event</h2>
+      <div class="filter-row">
+        <label>Filter aspek:</label>
+        <select id="filterAspek">
+          <option value="semua">Semua</option>
+          <option value="k3">K3</option>
+          <option value="material">Material</option>
+          <option value="prosedur">Prosedur</option>
+          <option value="progres">Progres</option>
+        </select>
+        <label style="margin-left: 8px">Filter klasifikasi:</label>
+        <select id="filterKlas">
+          <option value="semua">Semua</option>
+          <option value="CA">CA</option>
+          <option value="OR">OR</option>
+          <option value="UR">UR</option>
+          <option value="MD">MD</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Aspek</th>
+              <th>Event type</th>
+              <th>Klasifikasi</th>
+              <th>Keterangan</th>
+              <th>Waktu</th>
+            </tr>
+          </thead>
+          <tbody id="eventTable">
+            <tr>
+              <td colspan="6" class="empty">Memuat...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <script>
+      // ================================================================
+      // SOPHIE — FUZZY INFERENCE SYSTEM (7 Steps)
+      // Nilai membership dan rule dari simulasi expert judgment
+      // (akan diperbarui setelah validasi expert formal)
+      // ================================================================
+
+      const ASPEK_LABELS = {
+        k3: "K3",
+        material: "Material",
+        prosedur: "Prosedur",
+        progres: "Progres",
+      };
+
+      const ASPEK_SKENARIO = {
+        k3: ["k3"],
+        material: ["material"],
+        prosedur: ["prosedur"],
+        progres: ["progres"],
+      };
+
+      // Step 3 — Fuzzifikasi
+      // Membership function untuk error_rate (0–100%)
+      // Boundary: rendah [0–25], sedang [20–55], tinggi [50–100]
+      // Rationale: K3 konstruksi = zero-tolerance, threshold lebih ketat dari domain lain
+      function fuzzify(errorRate) {
+        const rendah =
+          errorRate <= 20 ? 1 : errorRate <= 30 ? (30 - errorRate) / 10 : 0;
+
+        const sedang =
+          errorRate < 20
+            ? 0
+            : errorRate <= 40
+              ? (errorRate - 20) / 20
+              : errorRate <= 50
+                ? 1
+                : errorRate <= 60
+                  ? (60 - errorRate) / 10
+                  : 0;
+
+        const tinggi =
+          errorRate < 50 ? 0 : errorRate <= 60 ? (errorRate - 50) / 10 : 1;
+
+        return { rendah, sedang, tinggi };
+      }
+
+      // Step 4 — Inferensi rule
+      // Rule dari expert judgment (konstruksi):
+      //   MD berat > UR > OR dalam konteks pengawasan konstruksi
+      //   MD = gagal deteksi bahaya = risiko paling besar untuk OJT
+      // Output: { kesiapan_tinggi, kesiapan_sedang, kesiapan_rendah } dalam [0,1]
+      function infer(fuzzyErrorRate, fuzzyMdRate) {
+        const { rendah, sedang, tinggi } = fuzzyErrorRate;
+        const {
+          rendah: mdRendah,
+          sedang: mdSedang,
+          tinggi: mdTinggi,
+        } = fuzzyMdRate;
+
+        // Rule 1: error rendah -> kesiapan tinggi
+        const r1 = rendah;
+
+        // Rule 2: error sedang, MD rendah -> kesiapan sedang
+        const r2 = Math.min(sedang, mdRendah);
+
+        // Rule 3: error sedang, MD sedang/tinggi -> kesiapan rendah
+        const r3 = Math.min(sedang, Math.max(mdSedang, mdTinggi));
+
+        // Rule 4: error tinggi -> kesiapan rendah (apapun MD-nya)
+        const r4 = tinggi;
+
+        // Rule 5: error rendah-sedang, MD tinggi -> kesiapan sedang
+        //         (masih bisa handle, tapi mislabel bahaya = perhatian)
+        const r5 = Math.min(Math.max(rendah, sedang * 0.5), mdTinggi);
+
+        return {
+          kesiapan_tinggi: r1,
+          kesiapan_sedang: Math.max(r2, r5),
+          kesiapan_rendah: Math.max(r3, r4),
+        };
+      }
+
+      // Step 5 — Defuzzifikasi (centroid / weighted average)
+      // Nilai pusat tiap output: tinggi=88, sedang=62, rendah=28
+      // Rationale: sengaja tidak simetris (28, tidak 25)
+      //            karena konstruksi punya safety floor lebih moderat
+      function defuzzify(inferOutput) {
+        const PUSAT = {
+          kesiapan_tinggi: 88,
+          kesiapan_sedang: 62,
+          kesiapan_rendah: 28,
+        };
+        const num =
+          inferOutput.kesiapan_tinggi * PUSAT.kesiapan_tinggi +
+          inferOutput.kesiapan_sedang * PUSAT.kesiapan_sedang +
+          inferOutput.kesiapan_rendah * PUSAT.kesiapan_rendah;
+        const den =
+          inferOutput.kesiapan_tinggi +
+          inferOutput.kesiapan_sedang +
+          inferOutput.kesiapan_rendah;
+        if (den === 0) return null; // tidak ada data
+        return Math.round(num / den);
+      }
+
+      // Step 2 — Feature extraction per aspek
+      // Hitung frekuensi CA/OR/UR/MD dari events yang masuk skenario aspek tsb
+      function extractFeatures(events, aspek) {
+        const skenarios = ASPEK_SKENARIO[aspek];
+        const filtered = events.filter(
+          (e) => skenarios.includes(e.scenario) && e.klasifikasi,
+        );
+
+        const rekap = { CA: 0, OR: 0, UR: 0, MD: 0, total: 0 };
+        for (const e of filtered) {
+          if (rekap[e.klasifikasi] !== undefined) rekap[e.klasifikasi]++;
+          rekap.total++;
+        }
+        return rekap;
+      }
+
+      // Hitung skor + trace langkah FIS
+      function hitungSkorAspek(rekap) {
+        if (rekap.total === 0) return { skor: null, trace: null };
+
+        const errorCount = rekap.OR + rekap.UR + rekap.MD;
+        const errorRate = (errorCount / rekap.total) * 100;
+        const mdRate = (rekap.MD / rekap.total) * 100;
+
+        const fuzzyError = fuzzify(errorRate);
+        const fuzzyMd = fuzzify(mdRate);
+        const inferOut = infer(fuzzyError, fuzzyMd);
+        const skor = defuzzify(inferOut);
+
+        return {
+          skor,
+          trace: {
+            total: rekap.total,
+            errorRate: Math.round(errorRate),
+            mdRate: Math.round(mdRate),
+            fuzzyError,
+            fuzzyMd,
+            inferOut,
+          },
+        };
+      }
+
+      // Step 6 — Threshold rekomendasi
+      const THRESHOLD_OJT = 65;
+
+      function kategoriSkor(skor) {
+        if (skor === null)
+          return { label: "Belum ada data", cls: "kat-nodata" };
+        if (skor >= THRESHOLD_OJT)
+          return { label: "Siap OJT", cls: "kat-siap" };
+        if (skor >= 45) return { label: "Perlu penguatan", cls: "kat-perlu" };
+        return { label: "Belum siap", cls: "kat-belum" };
+      }
+
+      function warnaSkorBar(skor) {
+        if (skor === null) return "#ccc";
+        if (skor >= THRESHOLD_OJT) return "#27ae60";
+        if (skor >= 45) return "#e67e22";
+        return "#e74c3c";
+      }
+
+      // ================================================================
+      // BADGE & FORMAT HELPERS
+      // ================================================================
+
+      function badgeKlas(klas) {
+        const map = {
+          CA: "badge-ca",
+          OR: "badge-or",
+          UR: "badge-ur",
+          MD: "badge-md",
+        };
+        return `<span class="badge ${map[klas] || ""}">${klas || "-"}</span>`;
+      }
+
+      function formatTime(ts) {
+        if (!ts) return "-";
+        return new Date(ts).toLocaleString("id-ID", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+
+      // ================================================================
+      // REKAP CARD HTML
+      // ================================================================
+
+      function renderRekapCard(rekap) {
+        return `
+        <div class="rekap-card ca"><div class="label">Correct (CA)</div><div class="value">${rekap.CA}</div></div>
+        <div class="rekap-card or"><div class="label">Overreaction (OR)</div><div class="value">${rekap.OR}</div></div>
+        <div class="rekap-card ur"><div class="label">Underreaction (UR)</div><div class="value">${rekap.UR}</div></div>
+        <div class="rekap-card md"><div class="label">Misdetection (MD)</div><div class="value">${rekap.MD}</div></div>
+        <div class="rekap-card total"><div class="label">Total events</div><div class="value">${rekap.total}</div></div>
+      `;
+      }
+
+      // ================================================================
+      // MAIN
+      // ================================================================
+
+      const sessionId = new URLSearchParams(window.location.search).get("id");
+      document.getElementById("sessionTitle").textContent = sessionId
+        ? `Session: ${sessionId}`
+        : "Session tidak ditemukan";
+
+      let radarChart = null;
+      let allEvents = [];
+      let skorPerAspek = {};
+
+      // Ambil data dari dua endpoint
+      Promise.all([
+        fetch(`/api/session/${sessionId}/rekap`).then((r) => r.json()),
+        fetch(`/api/session/${sessionId}`).then((r) => r.json()),
+      ])
+        .then(([rekapData, detailData]) => {
+          const rekapGlobal = rekapData.rekap;
+          allEvents = detailData.events || [];
+
+          const meta = detailData.meta || {};
+          document.getElementById("sessionMeta").textContent =
+            `${meta.playerName || sessionId} · ${formatTime(meta.startedAt)} · ${allEvents.length} event`;
+
+          // --- REKAP GLOBAL ---
+          document.getElementById("rekapGrid").innerHTML =
+            renderRekapCard(rekapGlobal);
+
+          // --- Step 2–5: Hitung skor per aspek ---
+          const aspekList = Object.keys(ASPEK_LABELS);
+          const radarData = [];
+
+          for (const aspek of aspekList) {
+            const rekap = extractFeatures(allEvents, aspek);
+            const { skor, trace } = hitungSkorAspek(rekap);
+            skorPerAspek[aspek] = { skor, rekap, trace };
+            radarData.push(skor !== null ? skor : 0);
+          }
+
+          // --- ASPEK SKOR CARDS ---
+          const aspekSkorGrid = document.getElementById("aspekSkorGrid");
+          aspekSkorGrid.innerHTML = aspekList
+            .map((aspek) => {
+              const { skor } = skorPerAspek[aspek];
+              const kat = kategoriSkor(skor);
+              const tampil = skor !== null ? skor : "—";
+              return `
+          <div class="aspek-skor-card">
+            <div class="as-label">${ASPEK_LABELS[aspek]}</div>
+            <div class="as-skor">${tampil}</div>
+            <span class="as-kat ${kat.cls}">${kat.label}</span>
+          </div>
+        `;
+            })
+            .join("");
+
+          // --- RADAR CHART ---
+          radarChart = new Chart(document.getElementById("radarChart"), {
+            type: "radar",
+            data: {
+              labels: aspekList.map((a) => ASPEK_LABELS[a]),
+              datasets: [
+                {
+                  label: "Skor kesiapan",
+                  data: radarData,
+                  backgroundColor: "rgba(24, 95, 165, 0.12)",
+                  borderColor: "#185FA5",
+                  pointBackgroundColor: "#185FA5",
+                  pointRadius: 4,
+                },
+              ],
+            },
+            options: {
+              plugins: { legend: { display: false } },
+              scales: {
+                r: {
+                  min: 0,
+                  max: 100,
+                  ticks: { stepSize: 20, font: { size: 11 } },
+                  pointLabels: { font: { size: 13 } },
+                  grid: { color: "rgba(0,0,0,0.08)" },
+                },
+              },
+            },
+          });
+
+          // --- ASPEK TABS & DETAIL ---
+          const tabsEl = document.getElementById("aspekTabs");
+          tabsEl.innerHTML = aspekList
+            .map(
+              (aspek, i) =>
+                `<button class="aspek-tab ${i === 0 ? "active" : ""}" data-aspek="${aspek}">${ASPEK_LABELS[aspek]}</button>`,
+            )
+            .join("");
+
+          function renderAspekDetail(aspek) {
+            const { skor, rekap, trace } = skorPerAspek[aspek];
+            const kat = kategoriSkor(skor);
+            let html = "";
+
+            // Mini rekap
+            html += `<div class="aspek-rekap">
+          <div class="aspek-rekap-card"><div class="alabel">CA</div><div class="aval" style="color:#27ae60">${rekap.CA}</div></div>
+          <div class="aspek-rekap-card"><div class="alabel">OR</div><div class="aval" style="color:#e67e22">${rekap.OR}</div></div>
+          <div class="aspek-rekap-card"><div class="alabel">UR</div><div class="aval" style="color:#e74c3c">${rekap.UR}</div></div>
+          <div class="aspek-rekap-card"><div class="alabel">MD</div><div class="aval" style="color:#8e44ad">${rekap.MD}</div></div>
+          <div class="aspek-rekap-card"><div class="alabel">Total</div><div class="aval">${rekap.total}</div></div>
+        </div>`;
+
+            // Skor bar
+            const tampilSkor = skor !== null ? skor : 0;
+            html += `
+          <div class="skor-bar-wrap" style="margin-bottom:12px;">
+            <div class="skor-bar-header">
+              <span class="skor-bar-label">Skor kesiapan ${ASPEK_LABELS[aspek]}</span>
+              <span class="skor-bar-value" style="color:${warnaSkorBar(skor)}">${skor !== null ? skor : "—"} <span class="as-kat ${kat.cls}" style="font-size:11px;">${kat.label}</span></span>
+            </div>
+            <div class="skor-bar-track">
+              <div class="skor-bar-fill" style="width:${tampilSkor}%;background:${warnaSkorBar(skor)};"></div>
+            </div>
+          </div>`;
+
+            // FIS trace
+            if (trace) {
+              const fe = trace.fuzzyError;
+              const io = trace.inferOut;
+              html += `
+            <div class="fis-panel">
+              <div class="fis-step"><strong>Error rate:</strong> ${trace.errorRate}% · <strong>MD rate:</strong> ${trace.mdRate}%</div>
+              <div class="fis-step"><strong>Fuzzifikasi error:</strong> rendah=${fe.rendah.toFixed(2)}, sedang=${fe.sedang.toFixed(2)}, tinggi=${fe.tinggi.toFixed(2)}</div>
+              <div class="fis-step"><strong>Inferensi output:</strong> tinggi=${io.kesiapan_tinggi.toFixed(2)}, sedang=${io.kesiapan_sedang.toFixed(2)}, rendah=${io.kesiapan_rendah.toFixed(2)}</div>
+              <div class="fis-step"><strong>Skor defuzzifikasi:</strong> ${skor !== null ? skor : "tidak ada data"}</div>
+            </div>`;
+            } else {
+              html += `<p class="empty">Belum ada data simulasi untuk aspek ini.</p>`;
+            }
+
+            document.getElementById("aspekDetail").innerHTML = html;
+          }
+
+          renderAspekDetail(aspekList[0]);
+
+          tabsEl.addEventListener("click", (e) => {
+            const btn = e.target.closest(".aspek-tab");
+            if (!btn) return;
+            tabsEl
+              .querySelectorAll(".aspek-tab")
+              .forEach((t) => t.classList.remove("active"));
+            btn.classList.add("active");
+            renderAspekDetail(btn.dataset.aspek);
+          });
+
+          // --- REKOMENDASI (Step 6) ---
+          const ul = document.getElementById("rekomendasiList");
+          const bermasalah = aspekList.filter((a) => {
+            const s = skorPerAspek[a].skor;
+            return s !== null && s < THRESHOLD_OJT;
+          });
+          const sudahSiap = aspekList.filter((a) => {
+            const s = skorPerAspek[a].skor;
+            return s !== null && s >= THRESHOLD_OJT;
+          });
+
+          let rekItems = "";
+
+          for (const aspek of bermasalah) {
+            const s = skorPerAspek[aspek].skor;
+            const { rekap } = skorPerAspek[aspek];
+            const dominanError =
+              rekap.MD > rekap.UR && rekap.MD > rekap.OR
+                ? "Banyak gagal mendeteksi pelanggaran (MD) — perlu latihan identifikasi lapangan."
+                : rekap.UR > rekap.OR
+                  ? "Cenderung tidak merespons pelanggaran yang terdeteksi (UR) — perlu penguatan ketegasan."
+                  : "Cenderung bereaksi berlebihan (OR) — perlu kalibrasi proporsionalitas tindakan.";
+
+            rekItems += `
+          <li class="rek-item warn">
+            <div class="rek-icon">!</div>
+            <div class="rek-body">
+              <div class="rek-title">Penguatan aspek ${ASPEK_LABELS[aspek]} (skor: ${s})</div>
+              <div class="rek-desc">${dominanError}</div>
+            </div>
+          </li>`;
+          }
+
+          for (const aspek of sudahSiap) {
+            rekItems += `
+          <li class="rek-item ok">
+            <div class="rek-icon">✓</div>
+            <div class="rek-body">
+              <div class="rek-title">Aspek ${ASPEK_LABELS[aspek]} — siap OJT (skor: ${skorPerAspek[aspek].skor})</div>
+            </div>
+          </li>`;
+          }
+
+          const aspekTanpaData = aspekList.filter(
+            (a) => skorPerAspek[a].skor === null,
+          );
+          for (const aspek of aspekTanpaData) {
+            rekItems += `
+          <li class="rek-item" style="border-color:#e0e0dc;">
+            <div class="rek-icon" style="background:#f0f0ee;color:#888;">?</div>
+            <div class="rek-body">
+              <div class="rek-title" style="color:#888;">Aspek ${ASPEK_LABELS[aspek]} — belum ada data simulasi</div>
+            </div>
+          </li>`;
+          }
+
+          ul.innerHTML =
+            rekItems ||
+            `<li class="rek-item ok"><div class="rek-icon">✓</div><div class="rek-body"><div class="rek-title">Semua aspek siap OJT</div></div></li>`;
+
+          // --- BREAKDOWN TABLE (Step 7) ---
+          function renderTable() {
+            const filterAspek = document.getElementById("filterAspek").value;
+            const filterKlas = document.getElementById("filterKlas").value;
+
+            const rows = allEvents.filter((e) => {
+              if (!e.klasifikasi) return false;
+              if (filterAspek !== "semua") {
+                const s = ASPEK_SKENARIO[filterAspek];
+                if (!s.includes(e.scenario)) return false;
+              }
+              if (filterKlas !== "semua" && e.klasifikasi !== filterKlas)
+                return false;
+              return true;
+            });
+
+            const tbody = document.getElementById("eventTable");
+            if (rows.length === 0) {
+              tbody.innerHTML = `<tr><td colspan="6" class="empty">Tidak ada data untuk filter ini.</td></tr>`;
+              return;
+            }
+
+            tbody.innerHTML = rows
+              .map(
+                (e, i) => `
+          <tr>
+            <td>${i + 1}</td>
+            <td>${ASPEK_LABELS[e.scenario] || e.scenario || "-"}</td>
+            <td>${e.eventType || "-"}</td>
+            <td>${badgeKlas(e.klasifikasi)}</td>
+            <td>${e.keterangan || "-"}</td>
+            <td>${formatTime(e.timestamp)}</td>
+          </tr>
+        `,
+              )
+              .join("");
+          }
+
+          renderTable();
+          document
+            .getElementById("filterAspek")
+            .addEventListener("change", renderTable);
+          document
+            .getElementById("filterKlas")
+            .addEventListener("change", renderTable);
+        })
+        .catch((err) => {
+          console.error("Error loading session data:", err);
+          document.getElementById("sessionTitle").textContent =
+            "Gagal memuat data sesi.";
+        });
+    </script>
+  </body>
+</html>
