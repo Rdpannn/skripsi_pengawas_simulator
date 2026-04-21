@@ -1,8 +1,6 @@
 /**
  * RULE ENGINE - Evaluasi Zona K3
  *
- * Mengevaluasi TINDAKAN ASLI USER (bukan hasil auto-correct dari Unity)
- *
  * Klasifikasi:
  * - CA (Correct Action)  : Identifikasi benar + tindakan proporsional
  * - OR (Overreaction)    : Identifikasi benar, tindakan terlalu keras
@@ -15,15 +13,16 @@
  * Standar zona:
  *   Red Zone    = wajib rambu + garis pembatas
  *   Yellow Zone = wajib rambu saja
- *   Green Zone  = tidak ada pekerjaan aktif, fokus fasilitas K3
+ *   Green Zone  = tidak ada requirement → fokus fasilitas K3
  *
- * Input:
+ * Input dari ZoneCondition (Unity):
  * {
- *   zoneType       : "red" | "yellow" | "green",
- *   kondisiFaktual : "none" | "partial" | "ok",
- *   identifikasi   : "tidak_tersedia" | "sulit_terlihat" | "tidak_lengkap"
- *                    | "ada_masalah" | "kosong",
- *   tindakan       : "segera_lengkapi" | "tambahkan_perbaiki" | "kondisi_sesuai"
+ *   zoneType              : "red" | "yellow" | "green",
+ *   kondisiFaktual        : "tidak_tersedia" | "tidak_lengkap" | "partial" | "ok",
+ *   kondisiRambu          : "tidak_tersedia" | "sulit_terlihat" | "ok",
+ *   kondisiGarisPembatas  : "tidak_tersedia" | "sulit_terlihat" | "ok",
+ *   identifikasiUser      : { [id: string]: boolean },  // checkbox yang dicentang user
+ *   tindakan              : "segera_lengkapi" | "tambahkan_perbaiki" | "kondisi_sesuai"
  * }
  *
  * Output:
@@ -31,33 +30,41 @@
  *   klasifikasi : "CA" | "OR" | "UR" | "MD",
  *   keterangan  : string
  * }
- *
- * Changelog v2 (bugfix):
- *   [Bug 1] Red zone partial — label CA/OR terbalik untuk tambahkan_perbaiki vs segera_lengkapi
- *   [Bug 2] Yellow zone none + segera_lengkapi — harusnya OR bukan UR
- *   [Bug 3] Semua zona kondisi ok + adaMasalah — harusnya OR bukan MD
  */
 
 function evaluasiZona(payload) {
-  const { zoneType, kondisiFaktual, identifikasi, tindakan } = payload;
+  const {
+    zoneType,
+    kondisiFaktual,
+    kondisiRambu,
+    kondisiGarisPembatas,
+    identifikasiUser,
+    tindakan,
+  } = payload;
 
   console.log(
-    `[RULE ENGINE] Evaluating: zone=${zoneType}, kondisi=${kondisiFaktual}, identifikasi=${identifikasi}, tindakan=${tindakan}`,
+    `[RULE ENGINE] zone=${zoneType}, kondisi=${kondisiFaktual}, tindakan=${tindakan}`,
+  );
+  console.log(
+    `[RULE ENGINE] rambu=${kondisiRambu}, garisPembatas=${kondisiGarisPembatas}`,
   );
 
-  const identifikasiKosong =
-    identifikasi === "kosong" || identifikasi === undefined;
-  const adaMasalah = identifikasi !== "kosong" && identifikasi !== undefined;
+  // Ada tidaknya identifikasi dari user (minimal satu checkbox dicentang)
+  const adaIdentifikasi =
+    identifikasiUser && Object.values(identifikasiUser).some((v) => v === true);
 
   // ==================== RED ZONE ====================
+  // Wajib: rambu + garis pembatas, keduanya harus ada dan jelas
   if (zoneType === "red") {
-    // KASUS 1: Tidak ada fasilitas sama sekali
-    if (kondisiFaktual === "none") {
-      if (identifikasiKosong) {
+    // KASUS 1: Tidak ada fasilitas sama sekali (rambu + garis pembatas keduanya tidak ada)
+    if (kondisiFaktual === "tidak_tersedia") {
+      if (!adaIdentifikasi) {
         return md("Gagal mendeteksi tidak adanya fasilitas di red zone.");
       }
       if (tindakan === "segera_lengkapi") {
-        return ca("Red zone tanpa fasilitas, harus segera dilengkapi.");
+        return ca(
+          "Red zone tanpa fasilitas sama sekali harus segera dilengkapi.",
+        );
       }
       if (tindakan === "tambahkan_perbaiki") {
         return ur(
@@ -65,19 +72,42 @@ function evaluasiZona(payload) {
         );
       }
       if (tindakan === "kondisi_sesuai") {
-        return md("Tidak ada fasilitas tapi dianggap kondisi sesuai.");
+        return md(
+          "Tidak ada fasilitas sama sekali tapi dianggap kondisi sesuai.",
+        );
       }
     }
 
-    // KASUS 2: Fasilitas ada tapi bermasalah (partial)
-    // [Bug 1 Fix] tambahkan_perbaiki = CA (proporsional), segera_lengkapi = OR (terlalu keras)
+    // KASUS 2: Salah satu tidak ada (rambu ada tapi garis pembatas tidak ada, atau sebaliknya)
+    if (kondisiFaktual === "tidak_lengkap") {
+      if (!adaIdentifikasi) {
+        return md("Gagal mendeteksi fasilitas tidak lengkap di red zone.");
+      }
+      if (tindakan === "segera_lengkapi") {
+        return ca(
+          "Red zone dengan fasilitas tidak lengkap harus segera dilengkapi.",
+        );
+      }
+      if (tindakan === "tambahkan_perbaiki") {
+        return ca(
+          "Menambahkan fasilitas yang kurang adalah tindakan proporsional.",
+        );
+      }
+      if (tindakan === "kondisi_sesuai") {
+        return md(
+          "Fasilitas tidak lengkap di red zone tidak bisa dianggap sesuai.",
+        );
+      }
+    }
+
+    // KASUS 3: Semua ada tapi ada yang bermasalah (sulit terlihat)
     if (kondisiFaktual === "partial") {
-      if (identifikasiKosong) {
+      if (!adaIdentifikasi) {
         return md("Gagal mendeteksi masalah fasilitas di red zone.");
       }
       if (tindakan === "tambahkan_perbaiki") {
         return ca(
-          "Ada sebagian fasilitas yang bermasalah; tambahkan/perbaiki adalah tindakan proporsional.",
+          "Ada sebagian fasilitas bermasalah; tambahkan/perbaiki adalah tindakan proporsional.",
         );
       }
       if (tindakan === "segera_lengkapi") {
@@ -90,10 +120,9 @@ function evaluasiZona(payload) {
       }
     }
 
-    // KASUS 3: Fasilitas lengkap dan baik (ok)
-    // [Bug 3 Fix] adaMasalah saat kondisi ok = OR (over-identifikasi), bukan MD
+    // KASUS 4: Semua lengkap dan jelas
     if (kondisiFaktual === "ok") {
-      if (adaMasalah) {
+      if (adaIdentifikasi) {
         return or(
           "Mengidentifikasi masalah yang sebenarnya tidak ada di red zone.",
         );
@@ -102,24 +131,20 @@ function evaluasiZona(payload) {
         return ca("Red zone sudah lengkap dan sesuai standar.");
       }
       if (tindakan === "tambahkan_perbaiki") {
-        return ur(
-          "Terlalu berlebihan: kondisi sudah ok, tidak perlu tambah/perbaiki.",
-        );
+        return ur("Kondisi sudah ok, tidak perlu tambah/perbaiki.");
       }
       if (tindakan === "segera_lengkapi") {
-        return ur(
-          "Terlalu berlebihan: kondisi sudah ok, tidak perlu segera dilengkapi.",
-        );
+        return ur("Kondisi sudah ok, tidak perlu segera dilengkapi.");
       }
     }
   }
 
   // ==================== YELLOW ZONE ====================
+  // Wajib: rambu saja — garis pembatas BUKAN requirement
   if (zoneType === "yellow") {
-    // KASUS 1: Tidak ada rambu sama sekali
-    // [Bug 2 Fix] segera_lengkapi = OR (terlalu keras untuk yellow zone), bukan UR
-    if (kondisiFaktual === "none") {
-      if (identifikasiKosong) {
+    // KASUS 1: Rambu tidak ada
+    if (kondisiFaktual === "tidak_tersedia") {
+      if (!adaIdentifikasi) {
         return md("Gagal mendeteksi tidak adanya rambu di yellow zone.");
       }
       if (tindakan === "tambahkan_perbaiki") {
@@ -137,9 +162,9 @@ function evaluasiZona(payload) {
       }
     }
 
-    // KASUS 2: Rambu ada tapi bermasalah (partial)
+    // KASUS 2: Rambu ada tapi sulit terlihat
     if (kondisiFaktual === "partial") {
-      if (identifikasiKosong) {
+      if (!adaIdentifikasi) {
         return md("Gagal mendeteksi masalah rambu di yellow zone.");
       }
       if (tindakan === "tambahkan_perbaiki") {
@@ -155,13 +180,12 @@ function evaluasiZona(payload) {
       }
     }
 
-    // KASUS 3: Rambu lengkap dan baik (ok)
-    // [Bug 3 Fix] adaMasalah saat kondisi ok = OR (over-identifikasi), bukan MD
-    // Catatan: garis pembatas tidak wajib di yellow zone, jadi ok meski tanpa garis pembatas
+    // KASUS 3: Rambu lengkap dan jelas
+    // Catatan: garis pembatas tidak wajib di yellow zone
     if (kondisiFaktual === "ok") {
-      if (adaMasalah) {
+      if (adaIdentifikasi) {
         return or(
-          "Mengidentifikasi masalah yang sebenarnya tidak ada di yellow zone (misal: garis pembatas bukan requirement yellow zone).",
+          "Mengidentifikasi masalah yang sebenarnya tidak ada di yellow zone (garis pembatas bukan requirement yellow zone).",
         );
       }
       if (tindakan === "kondisi_sesuai") {
@@ -170,86 +194,37 @@ function evaluasiZona(payload) {
         );
       }
       if (tindakan === "tambahkan_perbaiki") {
-        return ur(
-          "Terlalu berlebihan: kondisi sudah ok, tidak perlu tambah/perbaiki.",
-        );
+        return ur("Kondisi sudah ok, tidak perlu tambah/perbaiki.");
       }
       if (tindakan === "segera_lengkapi") {
-        return ur(
-          "Terlalu berlebihan: kondisi sudah ok, tidak perlu segera dilengkapi.",
-        );
+        return ur("Kondisi sudah ok, tidak perlu segera dilengkapi.");
       }
     }
   }
 
   // ==================== GREEN ZONE ====================
+  // Tidak ada requirement rambu/garis pembatas → kondisiFaktual selalu "ok" dari ZoneCondition
   if (zoneType === "green") {
-    // KASUS 1: Tidak ada fasilitas sama sekali
-    if (kondisiFaktual === "none") {
-      if (identifikasiKosong) {
-        return md("Gagal mendeteksi tidak adanya fasilitas di green zone.");
-      }
-      if (tindakan === "tambahkan_perbaiki") {
-        return ca(
-          "Green zone perlu fasilitas yang memadai; perlu ditambahkan.",
-        );
-      }
-      if (tindakan === "segera_lengkapi") {
-        return or(
-          "Terlalu keras: green zone cukup ditambahkan, tidak perlu segera dilengkapi.",
-        );
-      }
-      if (tindakan === "kondisi_sesuai") {
-        return md("Tidak ada fasilitas tapi dianggap kondisi sesuai.");
-      }
+    if (adaIdentifikasi) {
+      return or(
+        "Mengidentifikasi masalah yang sebenarnya tidak ada di green zone.",
+      );
     }
-
-    // KASUS 2: Fasilitas tidak lengkap (partial)
-    if (kondisiFaktual === "partial") {
-      if (identifikasiKosong) {
-        return md("Gagal mendeteksi fasilitas tidak lengkap di green zone.");
-      }
-      if (tindakan === "tambahkan_perbaiki") {
-        return ca("Fasilitas tidak lengkap perlu dilengkapi atau diperbaiki.");
-      }
-      if (tindakan === "segera_lengkapi") {
-        return or(
-          "Terlalu keras: kondisi partial cukup ditambahkan atau diperbaiki.",
-        );
-      }
-      if (tindakan === "kondisi_sesuai") {
-        return md("Kondisi partial tidak bisa dianggap sesuai.");
-      }
+    if (tindakan === "kondisi_sesuai") {
+      return ca("Green zone sudah sesuai standar.");
     }
-
-    // KASUS 3: Fasilitas lengkap dan baik (ok)
-    // [Bug 3 Fix] adaMasalah saat kondisi ok = OR (over-identifikasi), bukan MD
-    if (kondisiFaktual === "ok") {
-      if (adaMasalah) {
-        return or(
-          "Mengidentifikasi masalah yang sebenarnya tidak ada di green zone.",
-        );
-      }
-      if (tindakan === "kondisi_sesuai") {
-        return ca("Green zone sudah sesuai standar.");
-      }
-      if (tindakan === "tambahkan_perbaiki") {
-        return ur(
-          "Terlalu berlebihan: kondisi sudah ok, tidak perlu tambah/perbaiki.",
-        );
-      }
-      if (tindakan === "segera_lengkapi") {
-        return ur(
-          "Terlalu berlebihan: kondisi sudah ok, tidak perlu segera dilengkapi.",
-        );
-      }
+    if (tindakan === "tambahkan_perbaiki") {
+      return ur("Kondisi sudah ok, tidak perlu tambah/perbaiki.");
+    }
+    if (tindakan === "segera_lengkapi") {
+      return ur("Kondisi sudah ok, tidak perlu segera dilengkapi.");
     }
   }
 
   // Fallback untuk kombinasi tidak dikenal
   return {
     klasifikasi: "UNKNOWN",
-    keterangan: `Kombinasi tidak dikenali: zone=${zoneType}, kondisi=${kondisiFaktual}, identifikasi=${identifikasi}, tindakan=${tindakan}`,
+    keterangan: `Kombinasi tidak dikenali: zone=${zoneType}, kondisi=${kondisiFaktual}, tindakan=${tindakan}`,
   };
 }
 

@@ -13,7 +13,6 @@
         margin: 0;
         padding: 0;
       }
-
       body {
         font-family: system-ui, sans-serif;
         font-size: 14px;
@@ -22,7 +21,6 @@
         background: #f5f5f3;
         padding: 24px;
       }
-
       a {
         color: #185fa5;
         text-decoration: none;
@@ -31,7 +29,6 @@
       a:hover {
         text-decoration: underline;
       }
-
       h1 {
         font-size: 20px;
         font-weight: 600;
@@ -42,19 +39,16 @@
         color: #666;
         margin-bottom: 24px;
       }
-
       h2 {
         font-size: 15px;
         font-weight: 600;
         margin-bottom: 12px;
         color: #111;
       }
-
       section {
         margin-bottom: 28px;
       }
 
-      /* Metric cards */
       .rekap-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
@@ -94,7 +88,6 @@
         color: #185fa5;
       }
 
-      /* Aspek tabs */
       .aspek-tabs {
         display: flex;
         gap: 6px;
@@ -117,7 +110,6 @@
         font-weight: 500;
       }
 
-      /* Per-aspek rekap */
       .aspek-rekap {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
@@ -140,7 +132,6 @@
         font-weight: 600;
       }
 
-      /* Skor bar */
       .skor-bar-wrap {
         margin-bottom: 6px;
       }
@@ -170,7 +161,6 @@
         transition: width 0.6s ease;
       }
 
-      /* Radar */
       .chart-wrapper {
         background: #fff;
         border: 0.5px solid #e0e0dc;
@@ -180,7 +170,6 @@
         margin: 0 auto;
       }
 
-      /* Rekomendasi */
       .rek-list {
         list-style: none;
         display: flex;
@@ -227,7 +216,6 @@
         margin-top: 2px;
       }
 
-      /* Badge */
       .badge {
         display: inline-block;
         padding: 2px 8px;
@@ -253,7 +241,6 @@
         color: #6a2f9a;
       }
 
-      /* Table */
       .table-wrap {
         overflow-x: auto;
       }
@@ -286,7 +273,6 @@
         background: #fafaf8;
       }
 
-      /* Aspek filter untuk breakdown */
       .filter-row {
         display: flex;
         gap: 6px;
@@ -307,7 +293,6 @@
         color: #222;
       }
 
-      /* FIS steps debug panel */
       .fis-panel {
         background: #f9f9f7;
         border: 0.5px solid #e0e0dc;
@@ -330,7 +315,6 @@
         padding: 16px 0;
       }
 
-      /* Skor aspek grid */
       .aspek-skor-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -392,12 +376,11 @@
     <section>
       <h2>Skor kesiapan per aspek</h2>
       <div id="aspekSkorGrid" class="aspek-skor-grid"></div>
-
       <div class="chart-wrapper">
         <canvas
           id="radarChart"
           role="img"
-          aria-label="Radar chart profil kesiapan user per aspek (K3, Material, Prosedur, Progres)"
+          aria-label="Radar chart profil kesiapan user per aspek"
           >Radar chart profil kesiapan.</canvas
         >
       </div>
@@ -457,9 +440,7 @@
 
     <script>
       // ================================================================
-      // SOPHIE — FUZZY INFERENCE SYSTEM (7 Steps)
-      // Nilai membership dan rule dari simulasi expert judgment
-      // (akan diperbarui setelah validasi expert formal)
+      // SOPHIE — FUZZY INFERENCE SYSTEM
       // ================================================================
 
       const ASPEK_LABELS = {
@@ -469,21 +450,27 @@
         progres: "Progres",
       };
 
-      const ASPEK_SKENARIO = {
-        k3: ["k3"],
-        material: ["material"],
-        prosedur: ["prosedur"],
-        progres: ["progres"],
+      // Mapping aspek → eventType yang dikirim dari Unity via EventManager
+      // Satu aspek bisa punya beberapa eventType (misal K3 = zona + APD + APAR)
+      const ASPEK_EVENT_TYPES = {
+        k3: ["ZONE_EVALUATED", "APD_EVALUATED", "APAR_EVALUATED"],
+        material: ["MATERIAL_EVALUATED", "PENEMPATAN_EVALUATED"],
+        prosedur: ["PROSEDUR_EVALUATED", "DEFECT_EVALUATED"],
+        progres: ["PROGRES_EVALUATED"],
       };
 
-      // Step 3 — Fuzzifikasi
-      // Membership function untuk error_rate (0–100%)
-      // Boundary: rendah [0–25], sedang [20–55], tinggi [50–100]
-      // Rationale: K3 konstruksi = zero-tolerance, threshold lebih ketat dari domain lain
+      // Helper: cari aspek dari eventType
+      function aspekDariEventType(eventType) {
+        for (const [aspek, types] of Object.entries(ASPEK_EVENT_TYPES)) {
+          if (types.includes(eventType)) return aspek;
+        }
+        return null;
+      }
+
+      // ── FIS: Fuzzifikasi ──────────────────────────────────────────────
       function fuzzify(errorRate) {
         const rendah =
           errorRate <= 20 ? 1 : errorRate <= 30 ? (30 - errorRate) / 10 : 0;
-
         const sedang =
           errorRate < 20
             ? 0
@@ -494,18 +481,12 @@
                 : errorRate <= 60
                   ? (60 - errorRate) / 10
                   : 0;
-
         const tinggi =
           errorRate < 50 ? 0 : errorRate <= 60 ? (errorRate - 50) / 10 : 1;
-
         return { rendah, sedang, tinggi };
       }
 
-      // Step 4 — Inferensi rule
-      // Rule dari expert judgment (konstruksi):
-      //   MD berat > UR > OR dalam konteks pengawasan konstruksi
-      //   MD = gagal deteksi bahaya = risiko paling besar untuk OJT
-      // Output: { kesiapan_tinggi, kesiapan_sedang, kesiapan_rendah } dalam [0,1]
+      // ── FIS: Inferensi ────────────────────────────────────────────────
       function infer(fuzzyErrorRate, fuzzyMdRate) {
         const { rendah, sedang, tinggi } = fuzzyErrorRate;
         const {
@@ -513,23 +494,11 @@
           sedang: mdSedang,
           tinggi: mdTinggi,
         } = fuzzyMdRate;
-
-        // Rule 1: error rendah -> kesiapan tinggi
         const r1 = rendah;
-
-        // Rule 2: error sedang, MD rendah -> kesiapan sedang
         const r2 = Math.min(sedang, mdRendah);
-
-        // Rule 3: error sedang, MD sedang/tinggi -> kesiapan rendah
         const r3 = Math.min(sedang, Math.max(mdSedang, mdTinggi));
-
-        // Rule 4: error tinggi -> kesiapan rendah (apapun MD-nya)
         const r4 = tinggi;
-
-        // Rule 5: error rendah-sedang, MD tinggi -> kesiapan sedang
-        //         (masih bisa handle, tapi mislabel bahaya = perhatian)
         const r5 = Math.min(Math.max(rendah, sedang * 0.5), mdTinggi);
-
         return {
           kesiapan_tinggi: r1,
           kesiapan_sedang: Math.max(r2, r5),
@@ -537,10 +506,7 @@
         };
       }
 
-      // Step 5 — Defuzzifikasi (centroid / weighted average)
-      // Nilai pusat tiap output: tinggi=88, sedang=62, rendah=28
-      // Rationale: sengaja tidak simetris (28, tidak 25)
-      //            karena konstruksi punya safety floor lebih moderat
+      // ── FIS: Defuzzifikasi ────────────────────────────────────────────
       function defuzzify(inferOutput) {
         const PUSAT = {
           kesiapan_tinggi: 88,
@@ -555,18 +521,16 @@
           inferOutput.kesiapan_tinggi +
           inferOutput.kesiapan_sedang +
           inferOutput.kesiapan_rendah;
-        if (den === 0) return null; // tidak ada data
+        if (den === 0) return null;
         return Math.round(num / den);
       }
 
-      // Step 2 — Feature extraction per aspek
-      // Hitung frekuensi CA/OR/UR/MD dari events yang masuk skenario aspek tsb
+      // ── Feature extraction per aspek ──────────────────────────────────
       function extractFeatures(events, aspek) {
-        const skenarios = ASPEK_SKENARIO[aspek];
+        const types = ASPEK_EVENT_TYPES[aspek];
         const filtered = events.filter(
-          (e) => skenarios.includes(e.scenario) && e.klasifikasi,
+          (e) => types.includes(e.eventType) && e.klasifikasi,
         );
-
         const rekap = { CA: 0, OR: 0, UR: 0, MD: 0, total: 0 };
         for (const e of filtered) {
           if (rekap[e.klasifikasi] !== undefined) rekap[e.klasifikasi]++;
@@ -575,19 +539,15 @@
         return rekap;
       }
 
-      // Hitung skor + trace langkah FIS
       function hitungSkorAspek(rekap) {
         if (rekap.total === 0) return { skor: null, trace: null };
-
         const errorCount = rekap.OR + rekap.UR + rekap.MD;
         const errorRate = (errorCount / rekap.total) * 100;
         const mdRate = (rekap.MD / rekap.total) * 100;
-
         const fuzzyError = fuzzify(errorRate);
         const fuzzyMd = fuzzify(mdRate);
         const inferOut = infer(fuzzyError, fuzzyMd);
         const skor = defuzzify(inferOut);
-
         return {
           skor,
           trace: {
@@ -601,7 +561,7 @@
         };
       }
 
-      // Step 6 — Threshold rekomendasi
+      // ── Threshold & kategori ──────────────────────────────────────────
       const THRESHOLD_OJT = 65;
 
       function kategoriSkor(skor) {
@@ -620,10 +580,7 @@
         return "#e74c3c";
       }
 
-      // ================================================================
-      // BADGE & FORMAT HELPERS
-      // ================================================================
-
+      // ── Badge & format ────────────────────────────────────────────────
       function badgeKlas(klas) {
         const map = {
           CA: "badge-ca",
@@ -645,24 +602,19 @@
         });
       }
 
-      // ================================================================
-      // REKAP CARD HTML
-      // ================================================================
-
       function renderRekapCard(rekap) {
         return `
-        <div class="rekap-card ca"><div class="label">Correct (CA)</div><div class="value">${rekap.CA}</div></div>
-        <div class="rekap-card or"><div class="label">Overreaction (OR)</div><div class="value">${rekap.OR}</div></div>
-        <div class="rekap-card ur"><div class="label">Underreaction (UR)</div><div class="value">${rekap.UR}</div></div>
-        <div class="rekap-card md"><div class="label">Misdetection (MD)</div><div class="value">${rekap.MD}</div></div>
-        <div class="rekap-card total"><div class="label">Total events</div><div class="value">${rekap.total}</div></div>
-      `;
+          <div class="rekap-card ca"><div class="label">Correct (CA)</div><div class="value">${rekap.CA}</div></div>
+          <div class="rekap-card or"><div class="label">Overreaction (OR)</div><div class="value">${rekap.OR}</div></div>
+          <div class="rekap-card ur"><div class="label">Underreaction (UR)</div><div class="value">${rekap.UR}</div></div>
+          <div class="rekap-card md"><div class="label">Misdetection (MD)</div><div class="value">${rekap.MD}</div></div>
+          <div class="rekap-card total"><div class="label">Total events</div><div class="value">${rekap.total}</div></div>
+        `;
       }
 
       // ================================================================
       // MAIN
       // ================================================================
-
       const sessionId = new URLSearchParams(window.location.search).get("id");
       document.getElementById("sessionTitle").textContent = sessionId
         ? `Session: ${sessionId}`
@@ -672,7 +624,6 @@
       let allEvents = [];
       let skorPerAspek = {};
 
-      // Ambil data dari dua endpoint
       Promise.all([
         fetch(`/api/session/${sessionId}/rekap`).then((r) => r.json()),
         fetch(`/api/session/${sessionId}`).then((r) => r.json()),
@@ -681,15 +632,20 @@
           const rekapGlobal = rekapData.rekap;
           allEvents = detailData.events || [];
 
+          // Enrichment: tambahkan field `aspek` ke setiap event dari eventType-nya
+          allEvents.forEach((e) => {
+            if (!e.aspek) e.aspek = aspekDariEventType(e.eventType);
+          });
+
           const meta = detailData.meta || {};
           document.getElementById("sessionMeta").textContent =
             `${meta.playerName || sessionId} · ${formatTime(meta.startedAt)} · ${allEvents.length} event`;
 
-          // --- REKAP GLOBAL ---
+          // Rekap global
           document.getElementById("rekapGrid").innerHTML =
             renderRekapCard(rekapGlobal);
 
-          // --- Step 2–5: Hitung skor per aspek ---
+          // Hitung skor per aspek
           const aspekList = Object.keys(ASPEK_LABELS);
           const radarData = [];
 
@@ -700,24 +656,21 @@
             radarData.push(skor !== null ? skor : 0);
           }
 
-          // --- ASPEK SKOR CARDS ---
-          const aspekSkorGrid = document.getElementById("aspekSkorGrid");
-          aspekSkorGrid.innerHTML = aspekList
+          // Aspek skor cards
+          document.getElementById("aspekSkorGrid").innerHTML = aspekList
             .map((aspek) => {
               const { skor } = skorPerAspek[aspek];
               const kat = kategoriSkor(skor);
-              const tampil = skor !== null ? skor : "—";
               return `
-          <div class="aspek-skor-card">
-            <div class="as-label">${ASPEK_LABELS[aspek]}</div>
-            <div class="as-skor">${tampil}</div>
-            <span class="as-kat ${kat.cls}">${kat.label}</span>
-          </div>
-        `;
+              <div class="aspek-skor-card">
+                <div class="as-label">${ASPEK_LABELS[aspek]}</div>
+                <div class="as-skor">${skor !== null ? skor : "—"}</div>
+                <span class="as-kat ${kat.cls}">${kat.label}</span>
+              </div>`;
             })
             .join("");
 
-          // --- RADAR CHART ---
+          // Radar chart
           radarChart = new Chart(document.getElementById("radarChart"), {
             type: "radar",
             data: {
@@ -747,7 +700,7 @@
             },
           });
 
-          // --- ASPEK TABS & DETAIL ---
+          // Aspek tabs & detail
           const tabsEl = document.getElementById("aspekTabs");
           tabsEl.innerHTML = aspekList
             .map(
@@ -759,41 +712,34 @@
           function renderAspekDetail(aspek) {
             const { skor, rekap, trace } = skorPerAspek[aspek];
             const kat = kategoriSkor(skor);
-            let html = "";
+            let html = `
+              <div class="aspek-rekap">
+                <div class="aspek-rekap-card"><div class="alabel">CA</div><div class="aval" style="color:#27ae60">${rekap.CA}</div></div>
+                <div class="aspek-rekap-card"><div class="alabel">OR</div><div class="aval" style="color:#e67e22">${rekap.OR}</div></div>
+                <div class="aspek-rekap-card"><div class="alabel">UR</div><div class="aval" style="color:#e74c3c">${rekap.UR}</div></div>
+                <div class="aspek-rekap-card"><div class="alabel">MD</div><div class="aval" style="color:#8e44ad">${rekap.MD}</div></div>
+                <div class="aspek-rekap-card"><div class="alabel">Total</div><div class="aval">${rekap.total}</div></div>
+              </div>
+              <div class="skor-bar-wrap" style="margin-bottom:12px;">
+                <div class="skor-bar-header">
+                  <span class="skor-bar-label">Skor kesiapan ${ASPEK_LABELS[aspek]}</span>
+                  <span class="skor-bar-value" style="color:${warnaSkorBar(skor)}">${skor !== null ? skor : "—"} <span class="as-kat ${kat.cls}" style="font-size:11px;">${kat.label}</span></span>
+                </div>
+                <div class="skor-bar-track">
+                  <div class="skor-bar-fill" style="width:${skor !== null ? skor : 0}%;background:${warnaSkorBar(skor)};"></div>
+                </div>
+              </div>`;
 
-            // Mini rekap
-            html += `<div class="aspek-rekap">
-          <div class="aspek-rekap-card"><div class="alabel">CA</div><div class="aval" style="color:#27ae60">${rekap.CA}</div></div>
-          <div class="aspek-rekap-card"><div class="alabel">OR</div><div class="aval" style="color:#e67e22">${rekap.OR}</div></div>
-          <div class="aspek-rekap-card"><div class="alabel">UR</div><div class="aval" style="color:#e74c3c">${rekap.UR}</div></div>
-          <div class="aspek-rekap-card"><div class="alabel">MD</div><div class="aval" style="color:#8e44ad">${rekap.MD}</div></div>
-          <div class="aspek-rekap-card"><div class="alabel">Total</div><div class="aval">${rekap.total}</div></div>
-        </div>`;
-
-            // Skor bar
-            const tampilSkor = skor !== null ? skor : 0;
-            html += `
-          <div class="skor-bar-wrap" style="margin-bottom:12px;">
-            <div class="skor-bar-header">
-              <span class="skor-bar-label">Skor kesiapan ${ASPEK_LABELS[aspek]}</span>
-              <span class="skor-bar-value" style="color:${warnaSkorBar(skor)}">${skor !== null ? skor : "—"} <span class="as-kat ${kat.cls}" style="font-size:11px;">${kat.label}</span></span>
-            </div>
-            <div class="skor-bar-track">
-              <div class="skor-bar-fill" style="width:${tampilSkor}%;background:${warnaSkorBar(skor)};"></div>
-            </div>
-          </div>`;
-
-            // FIS trace
             if (trace) {
               const fe = trace.fuzzyError;
               const io = trace.inferOut;
               html += `
-            <div class="fis-panel">
-              <div class="fis-step"><strong>Error rate:</strong> ${trace.errorRate}% · <strong>MD rate:</strong> ${trace.mdRate}%</div>
-              <div class="fis-step"><strong>Fuzzifikasi error:</strong> rendah=${fe.rendah.toFixed(2)}, sedang=${fe.sedang.toFixed(2)}, tinggi=${fe.tinggi.toFixed(2)}</div>
-              <div class="fis-step"><strong>Inferensi output:</strong> tinggi=${io.kesiapan_tinggi.toFixed(2)}, sedang=${io.kesiapan_sedang.toFixed(2)}, rendah=${io.kesiapan_rendah.toFixed(2)}</div>
-              <div class="fis-step"><strong>Skor defuzzifikasi:</strong> ${skor !== null ? skor : "tidak ada data"}</div>
-            </div>`;
+                <div class="fis-panel">
+                  <div class="fis-step"><strong>Error rate:</strong> ${trace.errorRate}% · <strong>MD rate:</strong> ${trace.mdRate}%</div>
+                  <div class="fis-step"><strong>Fuzzifikasi error:</strong> rendah=${fe.rendah.toFixed(2)}, sedang=${fe.sedang.toFixed(2)}, tinggi=${fe.tinggi.toFixed(2)}</div>
+                  <div class="fis-step"><strong>Inferensi output:</strong> tinggi=${io.kesiapan_tinggi.toFixed(2)}, sedang=${io.kesiapan_sedang.toFixed(2)}, rendah=${io.kesiapan_rendah.toFixed(2)}</div>
+                  <div class="fis-step"><strong>Skor defuzzifikasi:</strong> ${skor !== null ? skor : "tidak ada data"}</div>
+                </div>`;
             } else {
               html += `<p class="empty">Belum ada data simulasi untuk aspek ini.</p>`;
             }
@@ -802,7 +748,6 @@
           }
 
           renderAspekDetail(aspekList[0]);
-
           tabsEl.addEventListener("click", (e) => {
             const btn = e.target.closest(".aspek-tab");
             if (!btn) return;
@@ -813,7 +758,7 @@
             renderAspekDetail(btn.dataset.aspek);
           });
 
-          // --- REKOMENDASI (Step 6) ---
+          // Rekomendasi
           const ul = document.getElementById("rekomendasiList");
           const bermasalah = aspekList.filter((a) => {
             const s = skorPerAspek[a].skor;
@@ -823,67 +768,55 @@
             const s = skorPerAspek[a].skor;
             return s !== null && s >= THRESHOLD_OJT;
           });
+          const tanpaData = aspekList.filter(
+            (a) => skorPerAspek[a].skor === null,
+          );
 
           let rekItems = "";
-
           for (const aspek of bermasalah) {
-            const s = skorPerAspek[aspek].skor;
-            const { rekap } = skorPerAspek[aspek];
+            const { skor, rekap } = skorPerAspek[aspek];
             const dominanError =
               rekap.MD > rekap.UR && rekap.MD > rekap.OR
                 ? "Banyak gagal mendeteksi pelanggaran (MD) — perlu latihan identifikasi lapangan."
                 : rekap.UR > rekap.OR
                   ? "Cenderung tidak merespons pelanggaran yang terdeteksi (UR) — perlu penguatan ketegasan."
                   : "Cenderung bereaksi berlebihan (OR) — perlu kalibrasi proporsionalitas tindakan.";
-
             rekItems += `
-          <li class="rek-item warn">
-            <div class="rek-icon">!</div>
-            <div class="rek-body">
-              <div class="rek-title">Penguatan aspek ${ASPEK_LABELS[aspek]} (skor: ${s})</div>
-              <div class="rek-desc">${dominanError}</div>
-            </div>
-          </li>`;
+              <li class="rek-item warn">
+                <div class="rek-icon">!</div>
+                <div class="rek-body">
+                  <div class="rek-title">Penguatan aspek ${ASPEK_LABELS[aspek]} (skor: ${skor})</div>
+                  <div class="rek-desc">${dominanError}</div>
+                </div>
+              </li>`;
           }
-
           for (const aspek of sudahSiap) {
             rekItems += `
-          <li class="rek-item ok">
-            <div class="rek-icon">✓</div>
-            <div class="rek-body">
-              <div class="rek-title">Aspek ${ASPEK_LABELS[aspek]} — siap OJT (skor: ${skorPerAspek[aspek].skor})</div>
-            </div>
-          </li>`;
+              <li class="rek-item ok">
+                <div class="rek-icon">✓</div>
+                <div class="rek-body"><div class="rek-title">Aspek ${ASPEK_LABELS[aspek]} — siap OJT (skor: ${skorPerAspek[aspek].skor})</div></div>
+              </li>`;
           }
-
-          const aspekTanpaData = aspekList.filter(
-            (a) => skorPerAspek[a].skor === null,
-          );
-          for (const aspek of aspekTanpaData) {
+          for (const aspek of tanpaData) {
             rekItems += `
-          <li class="rek-item" style="border-color:#e0e0dc;">
-            <div class="rek-icon" style="background:#f0f0ee;color:#888;">?</div>
-            <div class="rek-body">
-              <div class="rek-title" style="color:#888;">Aspek ${ASPEK_LABELS[aspek]} — belum ada data simulasi</div>
-            </div>
-          </li>`;
+              <li class="rek-item" style="border-color:#e0e0dc;">
+                <div class="rek-icon" style="background:#f0f0ee;color:#888;">?</div>
+                <div class="rek-body"><div class="rek-title" style="color:#888;">Aspek ${ASPEK_LABELS[aspek]} — belum ada data simulasi</div></div>
+              </li>`;
           }
-
           ul.innerHTML =
             rekItems ||
             `<li class="rek-item ok"><div class="rek-icon">✓</div><div class="rek-body"><div class="rek-title">Semua aspek siap OJT</div></div></li>`;
 
-          // --- BREAKDOWN TABLE (Step 7) ---
+          // Breakdown table
           function renderTable() {
             const filterAspek = document.getElementById("filterAspek").value;
             const filterKlas = document.getElementById("filterKlas").value;
 
             const rows = allEvents.filter((e) => {
               if (!e.klasifikasi) return false;
-              if (filterAspek !== "semua") {
-                const s = ASPEK_SKENARIO[filterAspek];
-                if (!s.includes(e.scenario)) return false;
-              }
+              if (filterAspek !== "semua" && e.aspek !== filterAspek)
+                return false;
               if (filterKlas !== "semua" && e.klasifikasi !== filterKlas)
                 return false;
               return true;
@@ -894,19 +827,17 @@
               tbody.innerHTML = `<tr><td colspan="6" class="empty">Tidak ada data untuk filter ini.</td></tr>`;
               return;
             }
-
             tbody.innerHTML = rows
               .map(
                 (e, i) => `
-          <tr>
-            <td>${i + 1}</td>
-            <td>${ASPEK_LABELS[e.scenario] || e.scenario || "-"}</td>
-            <td>${e.eventType || "-"}</td>
-            <td>${badgeKlas(e.klasifikasi)}</td>
-            <td>${e.keterangan || "-"}</td>
-            <td>${formatTime(e.timestamp)}</td>
-          </tr>
-        `,
+              <tr>
+                <td>${i + 1}</td>
+                <td>${e.aspek ? ASPEK_LABELS[e.aspek] : "-"}</td>
+                <td>${e.eventType || "-"}</td>
+                <td>${badgeKlas(e.klasifikasi)}</td>
+                <td>${e.keterangan || "-"}</td>
+                <td>${formatTime(e.timestamp)}</td>
+              </tr>`,
               )
               .join("");
           }
